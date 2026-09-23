@@ -2,25 +2,31 @@ name: evpn01
 
 topology:
   kinds:
-    srl:
-      image: ghcr.io/nokia/srlinux
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:25.10
     linux:
-      image: ghcr.io/hellt/network-multitool
+      image: ghcr.io/srl-labs/network-multitool:latest
 
   nodes:
     leaf1:
-      kind: srl
-      type: ixrd2
+      kind: nokia_srlinux
+      type: ixr-d2
     leaf2:
-      kind: srl
-      type: ixrd2
+      kind: nokia_srlinux
+      type: ixr-d2
     spine1:
-      kind: srl
-      type: ixrd3
+      kind: nokia_srlinux
+      type: ixr-d3
     srv1:
       kind: linux
+      exec:
+        - ip link set address 00:c1:ab:00:00:01 dev eth1
+        - ip addr add 192.168.0.1/24 dev eth1
     srv2:
       kind: linux
+      exec:
+        - ip link set address 00:c1:ab:00:00:02 dev eth1
+        - ip addr add 192.168.0.2/24 dev eth1
 
   links:
     # inter-switch links

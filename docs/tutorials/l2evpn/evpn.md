@@ -1,4 +1,11 @@
-<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/hellt/drawio-js@main/embed2.js" async></script>
+---
+comments: true
+---
+
+# EVPN configuration
+
+<script type="text/javascript" src="https://viewer.diagrams.net/js/viewer-static.min.js" async></script>
+
 Ethernet Virtual Private Network (EVPN), along with Virtual eXtensible LAN (VXLAN), is a technology that allows Layer 2 and Layer 3 traffic to be tunneled across an IP
 network.
 
@@ -10,13 +17,14 @@ The SR Linux EVPN-VXLAN solution enables Layer 2 Broadcast Domains (BDs) in mult
 This tutorial is focused on EVPN for VXLAN tunnels Layer 2.
 
 ## Overview
+
 EVPN-VXLAN provides Layer-2 connectivity in multi-tenant DCs. EVPN-VXLAN Broadcast Domains (BD) can span several leaf routers connected to the same IP fabric, allowing hosts attached to the same BD to communicate as though they were connected to the same layer-2 switch.
 
 VXLAN tunnels bridge the layer-2 frames between leaf routers with EVPN providing the control plane to automatically setup tunnels and use them efficiently.
 
 The following figure demonstrates this concept where servers `srv1` and `srv2` are connected to the different switches of the routed fabric, but appear to be on the same broadcast domain.
 
-<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:4,&quot;zoom&quot;:2,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/learn-srlinux/site/diagrams/quickstart.drawio&quot;}"></div>
+<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:4,&quot;zoom&quot;:2,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/srl-labs/learn-srlinux/diagrams/quickstart.drawio&quot;}"></div>
 
 Now that the DC fabric has a routed underlay, and the loopbacks of the leaf switches are mutually reachable[^1], we can proceed with the VXLAN based EVPN service configuration.
 
@@ -28,32 +36,34 @@ While doing that we will cover the following topics:
 * and BGP EVPN control plane configuration
 
 ## IBGP for EVPN
-Prior to configuring the overlay services we must enable the EVPN address family for the distribution of EVPN routes among leaf routers of the same tenant. 
+
+Prior to configuring the overlay services we must enable the EVPN address family for the distribution of EVPN routes among leaf routers of the same tenant.
 
 EVPN is enabled using iBGP and typically a Route Reflector (RR), or eBGP. In our example we have only two leafs, so we won't take extra time configuring the iBGP with a spine acting as a Route Reflector, and instead will configure the iBGP between the two leaf switches.
 
-<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:5,&quot;zoom&quot;:2,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/learn-srlinux/site/diagrams/quickstart.drawio&quot;}"></div>
+<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:5,&quot;zoom&quot;:2,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/srl-labs/learn-srlinux/diagrams/quickstart.drawio&quot;}"></div>
 
 For that iBGP configuration we will create a group called `iBGP-overlay` which will have the `peer-as` and `local-as` set to `100` to form an iBGP neighborship. The group will also host the same permissive `all` routing policy, enabled `evpn` and disabled ipv4-unicast address families.
 
-Then for each leaf we add a new BGP neighbor addressed by the remote `system0` interface address and local system address as the source. Below you will find the pastable snippets with the aforementioned config:
+Then for each leaf we add a new BGP neighbor addressed by the remote `system0` interface address and local system address as the source. Below you will find the paste-able snippets with the aforementioned config:
 
 === "leaf1"
-    ```
+    ```srl
     enter candidate
 
     /network-instance default protocols bgp
         group iBGP-overlay {
-            export-policy all
-            import-policy all
+            export-policy [ all ]
+            import-policy [ all ]
             peer-as 100
-            ipv4-unicast {
+            afi-safi ipv4-unicast {
                 admin-state disable
             }
-            evpn {
+            afi-safi evpn {
                 admin-state enable
             }
-            local-as 100 {
+            local-as {
+                as-number 100
             }
             timers {
                 minimum-advertisement-interval 1
@@ -69,21 +79,22 @@ Then for each leaf we add a new BGP neighbor addressed by the remote `system0` i
     commit now
     ```
 === "leaf2"
-    ```
+    ```srl
     enter candidate
 
     /network-instance default protocols bgp
         group iBGP-overlay {
-            export-policy all
-            import-policy all
+            export-policy [ all ]
+            import-policy [ all ]
             peer-as 100
-            ipv4-unicast {
+            afi-safi ipv4-unicast {
                 admin-state disable
             }
-            evpn {
+            afi-safi evpn {
                 admin-state enable
             }
-            local-as 100 {
+            local-as {
+                as-number 100 
             }
             timers {
                 minimum-advertisement-interval 1
@@ -101,7 +112,7 @@ Then for each leaf we add a new BGP neighbor addressed by the remote `system0` i
 
 Ensure that the iBGP session is established before proceeding any further:
 
-``` linenums="1"
+```srl linenums="1"
 A:leaf1# /show network-instance default protocols bgp neighbor 10.0.0.2
 ----------------------------------------------------------------------------------------------------------------
 BGP neighbor summary for network-instance "default"
@@ -116,18 +127,20 @@ Flags: S static, D dynamic, L discovered by LLDP, B BFD enabled, - disabled, * s
 |           |           | overlay   |           |           | ed        | 9s        |           |           |
 +-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------+-----------+
 ```
+
 Right now, as we don't have any EVPN service created, there are no EVPN routes that are being sent/received, which is indicated in the last column of the table above.
 
 ## Access interfaces
+
 Next we are configuring the interfaces from the leaf switches to the corresponding servers. According to our lab's wiring diagram, interface 1 is connected to the server on both leaf switches:
 
-<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:6,&quot;zoom&quot;:2,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/learn-srlinux/site/diagrams/quickstart.drawio&quot;}"></div>
+<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph='{"page":6,"zoom":2,"highlight":"#0000ff","nav":true,"check-visible-state":true,"resize":true,"url":"https://raw.githubusercontent.com/srl-labs/learn-srlinux/diagrams/quickstart.drawio"}'></div>
 
-Configuration of an access interface is nothing special, we already [configured leaf-spine interfaces](fabric.md#leaf-spine-interfaces) at the fabric configuration stage, so the steps are all familiar. The only detail worth mentioning here is that we have to indicate the type of the subinterface to be [`bridged`](../../kb/ifaces.md#subinterfaces), this makes the interfaces only attachable to a network instance of `mac-vrf` type with MAC learning and layer-2 forwarding enabled.
+Configuration of an access interface is nothing special, we already [configured leaf-spine interfaces](fabric.md#leaf-spine-interfaces) at the fabric configuration stage, so the steps are all familiar. The only detail worth mentioning here is that we have to indicate the type of the subinterface to be `bridged`, this makes the interfaces only attachable to a network instance of `mac-vrf` type with MAC learning and layer-2 forwarding enabled.
 
 The following config is applied to both leaf switches:
 
-```
+```srl
 enter candidate
     /interface ethernet-1/1 {
         vlan-tagging true
@@ -148,15 +161,16 @@ commit now
 As the config snippet shows, we are not using any VLAN classification on the subinterface, our intention is to send untagged frames from the servers.
 
 ## Tunnel/VXLAN interface
+
 After creating the access sub-interfaces we are proceeding with creation of the VXLAN/Tunnel interfaces. The [VXLAN encapsulation](https://datatracker.ietf.org/doc/html/rfc8365#section-5) in the dataplane allows MAC-VRFs of the same BD to be connected throughout the IP fabric.
 
 The SR Linux models VXLAN as a tunnel-interface which has a vxlan-interface within. The tunnel-interface for VXLAN is configured with a name `vxlan<N>` where `N = 0..255`.
 
 A vxlan-interface is configured under a tunnel-interface. At a minimum, a vxlan-interface must have an index, type, and ingress VXLAN Network Identifier (VNI).
 
-- The index can be a number in the range 0-4294967295.
-- The type can be bridged or routed and indicates whether the vxlan-interface can be linked to a mac-vrf (bridged) or ip-vrf (routed).
-- The ingress VNI is the VXLAN Network Identifier that the system looks for in incoming VXLAN packets to classify them to this vxlan-interface and its
+* The index can be a number in the range 0-4294967295.
+* The type can be bridged or routed and indicates whether the vxlan-interface can be linked to a mac-vrf (bridged) or ip-vrf (routed).
+* The ingress VNI is the VXLAN Network Identifier that the system looks for in incoming VXLAN packets to classify them to this vxlan-interface and its
 network-instance. VNI can be in the range of `1..16777215`.  
   The VNI is used to find the MAC-VRF where the inner MAC lookup is performed. The egress VNI is not configured and is determined by the imported EVPN routes.  
   SR Linux requires that the egress VNI (discovered) matches the configured ingress VNI so that two leaf routers attached to the same BD can exchange packets.
@@ -166,7 +180,7 @@ network-instance. VNI can be in the range of `1..16777215`.
 
 The above information translates to a configuration snippet which is applicable both to `leaf1` and `leaf2` nodes.
 
-```
+```srl
 enter candidate
     /tunnel-interface vxlan1 {
         vxlan-interface 1 {
@@ -180,7 +194,8 @@ commit now
 ```
 
 To verify the tunnel interface configuration:
-```
+
+```srl
 A:leaf2# show tunnel-interface vxlan-interface brief
 ---------------------------------------------------------------------------------
 Show report for vxlan-tunnels
@@ -198,13 +213,14 @@ Summary
 ```
 
 ## MAC-VRF
-Now it is a turn of MAC-VRF to get configured.
 
-The network-instance type `mac-vrf` functions as a broadcast domain. Each mac-vrf network-instance builds a bridge table composed of MAC addresses that can be learned via the data path on network-instance interfaces, learned via BGP EVPN or provided with static configuration.
+Now it is the turn of MAC-VRF to get configured.
 
-By associating the access and vxlan interfaces with the mac-vrf we bound them to this network-instance:
+The network-instance type `mac-vrf` functions as a broadcast domain. Each mac-vrf network-instance builds a bridge table composed of MAC addresses that can be learned via the data path on network-instance interfaces, via BGP EVPN or provided with static configuration.
 
-```
+With the below snippet, which is applicable to both leaf1 and leaf2, we are associating the access and vxlan interfaces with the mac-vrf. With that we bound them to this network-instance.
+
+```srl
 enter candidate
     /network-instance vrf-1 {
         type mac-vrf
@@ -219,14 +235,18 @@ commit now
 
 ## Server interfaces
 
-The servers in our fabric do not have any addresses on their `eth1` interfaces by default. It is time to configure IP addresses on both servers, so that they will be ready to communicate with each other once we complete the EVPN service configuration.
+The servers in our fabric have IPv4 addresses for their `eth1` interfaces configured as per the `exec` instructions in the [topology file](intro.md#lab-deployment). For completeness, we show below how to manually configure the IPv4 addresses on the `eth1` interfaces of the servers.
 
-By the end of this section, we will have the following addressing scheme complete:
+Our servers connectivity diagram looks like this:
 
-<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:7,&quot;zoom&quot;:3,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/learn-srlinux/site/diagrams/quickstart.drawio&quot;}"></div>
+<div class='mxgraph' style='max-width:100%;border:1px solid transparent;margin:0 auto; display:block;' data-mxgraph='{"page":7,"zoom":3,"highlight":"#0000ff","nav":true,"check-visible-state":true,"resize":true,"url":"https://raw.githubusercontent.com/srl-labs/learn-srlinux/diagrams/quickstart.drawio"}'></div>
 
+To connect to a bash shell of a server execute `docker exec -it <container-name> bash`:
+/// details | Configure MAC and IP addresses on the servers
 
-To connect to a shell of a server execute `docker exec -it <container-name> bash`:
+Both MAC and IP addresses are automatically configured in our lab definition file via the `exec` command, but should you want to change the addresses/MACs, here is how to do it.
+
+First, connect to the server's bash shell:
 
 === "srv1"
     ```
@@ -248,6 +268,7 @@ Within the shell, configure MAC address[^2] and IPv4 address for the `eth1` inte
     ip link set address 00:c1:ab:00:00:02 dev eth1
     ip addr add 192.168.0.2/24 dev eth1
     ```
+///
 
 Let's try to ping server2 from server1:
 
@@ -261,7 +282,7 @@ PING 192.168.0.2 (192.168.0.2) 56(84) bytes of data.
 
 That failed, expectedly, as our servers connected to different leafs, and those leafs do not yet have a shared broadcast domain. But by just trying to ping the remote party from server 1, we made the `srv1` interface MAC to get learned by the `leaf1` mac-vrf network instance:
 
-```
+```srl
 A:leaf1# show network-instance vrf-1 bridge-table mac-table all
 ----------------------------------------------------------------------------------------------------------------------
 Mac-table of network instance vrf-1
@@ -284,6 +305,7 @@ Total Macs                :    1 Total    1 Active
 ```
 
 ## EVPN in MAC-VRF
+
 To advertise the locally learned MACs to the remote leafs we have to configure EVPN in our `vrf-1` network-instance.
 
 EVPN configuration under the mac-vrf network instance will require two configuration containers:
@@ -293,7 +315,7 @@ EVPN configuration under the mac-vrf network instance will require two configura
 
 The following configuration is entered on both leafs:
 
-```
+```srl
 enter candidate
     /network-instance vrf-1
         protocols {
@@ -318,7 +340,7 @@ commit now
 
 Once configured, the `bgp-vpn` instance can be checked to have the RT/RD values set:
 
-```
+```srl
 A:leaf1# show network-instance vrf-1 protocols bgp-vpn bgp-instance 1
 =====================================================================
 Net Instance   : vrf-1
@@ -331,21 +353,23 @@ Net Instance   : vrf-1
 ```
 
 !!!note "VNI to EVI mapping"
-    As of release 21.6, SR Linux uses only **VLAN-based Service** type of mapping between the VNI and EVI. In this option, a single Ethernet broadcast domain (e.g., subnet)
-    represented by a VNI is mapped to a unique EVI.[^5]
+    Prior to release 21.11, SR Linux used only **VLAN-based Service** type of mapping between the VNI and EVI. In this option, a single Ethernet broadcast domain (e.g., subnet)
+    represented by a VNI is mapped to a unique EVI.[^3]
+
+    Starting from release 21.11 SR Linux supports an [interoperability mode](https://documentation.nokia.com/srlinux/SR_Linux_HTML_R21-11/EVPN-VXLAN_Guide/evpn_interoperability_with_vlan_aware_bundle_services.html) in which SR Linux leaf nodes can be attached to VLAN-aware bundle broadcast domains along with other third-party routers.
 
 ## Final configurations
-For your convenience, in case you want to jump over the config routines and start with control/data plane verification we provide the resulting configuration[^6] for all the lab nodes. You can copy paste those snippets to the relevant nodes and proceed with verification tasks.
+
+For your convenience, in case you want to jump over the config routines and start with control/data plane verification we provide the resulting configuration[^4] for all the lab nodes. You can copy paste those snippets to the relevant nodes and proceed with verification tasks.
 
 ???example "pastable snippets"
     === "leaf1"
-        ```
+        ```srl
         enter candidate
             /routing-policy {
                 policy all {
                     default-action {
-                        accept {
-                        }
+                        policy-result accept
                     }
                 }
             }
@@ -366,25 +390,26 @@ For your convenience, in case you want to jump over the config routines and star
                     bgp {
                         autonomous-system 101
                         router-id 10.0.0.1
+                        afi-safi ipv4-unicast {
+                            admin-state enable
+                        }
                         group eBGP-underlay {
-                            export-policy all
-                            import-policy all
+                            export-policy [ all ]
+                            import-policy [ all ]
                             peer-as 201
-                            ipv4-unicast {
-                                admin-state enable
-                            }
                         }
                         group iBGP-overlay {
-                            export-policy all
-                            import-policy all
+                            export-policy [ all ]
+                            import-policy [ all ]
                             peer-as 100
-                            ipv4-unicast {
+                            afi-safi ipv4-unicast {
                                 admin-state disable
                             }
-                            evpn {
+                            afi-safi evpn {
                                 admin-state enable
                             }
-                            local-as 100 {
+                            local-as {
+                                as-number 100
                             }
                             timers {
                                 minimum-advertisement-interval 1
@@ -446,6 +471,7 @@ For your convenience, in case you want to jump over the config routines and star
             /interface ethernet-1/49 {
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 192.168.11.1/30 {
                         }
                     }
@@ -455,6 +481,7 @@ For your convenience, in case you want to jump over the config routines and star
                 admin-state enable
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 10.0.0.1/32 {
                         }
                     }
@@ -463,13 +490,12 @@ For your convenience, in case you want to jump over the config routines and star
         commit now
         ```
     === "leaf2"
-        ```
+        ```srl
         enter candidate
             /routing-policy {
                 policy all {
                     default-action {
-                        accept {
-                        }
+                        policy-result accept
                     }
                 }
             }
@@ -490,25 +516,26 @@ For your convenience, in case you want to jump over the config routines and star
                     bgp {
                         autonomous-system 102
                         router-id 10.0.0.2
+                        afi-safi ipv4-unicast {
+                            admin-state enable
+                        }
                         group eBGP-underlay {
-                            export-policy all
-                            import-policy all
+                            export-policy [ all ]
+                            import-policy [ all ]
                             peer-as 201
-                            ipv4-unicast {
-                                admin-state enable
-                            }
                         }
                         group iBGP-overlay {
-                            export-policy all
-                            import-policy all
+                            export-policy [ all ]
+                            import-policy [ all ]
                             peer-as 100
-                            ipv4-unicast {
+                            afi-safi ipv4-unicast {
                                 admin-state disable
                             }
-                            evpn {
+                            afi-safi evpn {
                                 admin-state enable
                             }
-                            local-as 100 {
+                            local-as {
+                                as-number 100
                             }
                             timers {
                                 minimum-advertisement-interval 1
@@ -569,6 +596,7 @@ For your convenience, in case you want to jump over the config routines and star
             interface ethernet-1/49 {
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 192.168.12.1/30 {
                         }
                     }
@@ -578,6 +606,7 @@ For your convenience, in case you want to jump over the config routines and star
                 admin-state enable
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 10.0.0.2/32 {
                         }
                     }
@@ -586,13 +615,12 @@ For your convenience, in case you want to jump over the config routines and star
         commit now
         ```
     === "spine1"
-        ```
+        ```srl
         enter candidate
             /routing-policy {
                 policy all {
                     default-action {
-                        accept {
-                        }
+                        policy-result accept
                     }
                 }
             }
@@ -609,10 +637,10 @@ For your convenience, in case you want to jump over the config routines and star
                         autonomous-system 201
                         router-id 10.0.1.1
                         group eBGP-underlay {
-                            export-policy all
-                            import-policy all
+                            export-policy [ all ]
+                            import-policy [ all ]
                         }
-                        ipv4-unicast {
+                        afi-safi ipv4-unicast {
                             admin-state enable
                         }
                         neighbor 192.168.11.1 {
@@ -630,6 +658,7 @@ For your convenience, in case you want to jump over the config routines and star
             /interface ethernet-1/1 {
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 192.168.11.2/30 {
                         }
                     }
@@ -638,6 +667,7 @@ For your convenience, in case you want to jump over the config routines and star
             interface ethernet-1/2 {
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 192.168.12.2/30 {
                         }
                     }
@@ -647,6 +677,7 @@ For your convenience, in case you want to jump over the config routines and star
                 admin-state enable
                 subinterface 0 {
                     ipv4 {
+                        admin-state enable
                         address 10.0.1.1/32 {
                         }
                     }
@@ -670,11 +701,14 @@ For your convenience, in case you want to jump over the config routines and star
         ip link set address 00:c1:ab:00:00:02 dev eth1
         ip addr add 192.168.0.2/24 dev eth1
         ```
+
 ## Verification
+
 ### EVPN IMET routes
+
 When the BGP-EVPN is configured in the mac-vrf instance, the leafs start to exchange EVPN routes, which we can verify with the following commands:
 
-```
+```srl
 A:leaf1# /show network-instance default protocols bgp neighbor 10.0.0.2
 ----------------------------------------------------------------------------------------------------------------
 BGP neighbor summary for network-instance "default"
@@ -700,7 +734,7 @@ The IMET route is advertised as soon as bgp-evpn is enabled in the MAC-VRF; it h
 The IMET/RT3 routes can be viewed in summary and detailed modes:
 
 === "RT3 summary"
-    ```
+    ```srl
     A:leaf1# /show network-instance default protocols bgp routes evpn route-type 3 summary
     ----------------------------------------------------------------------------------------------------------------
     Show report for the BGP route table of network-instance "default"
@@ -721,7 +755,7 @@ The IMET/RT3 routes can be viewed in summary and detailed modes:
     ----------------------------------------------------------------------------------------------------------------
     ```
 === "RT3 detailed"
-    ```
+    ```srl
     A:leaf1# /show network-instance default protocols bgp routes evpn route-type 3 detail
     -------------------------------------------------------------------------------------
     Show report for the EVPN routes in network-instance  "default"
@@ -748,15 +782,15 @@ The IMET/RT3 routes can be viewed in summary and detailed modes:
     ```
 
 ???info "Lets capture those routes?"
-    Since our lab is launched with containerlab, we can leverage the transparent sniffing of packets that [it offers](https://containerlab.srlinux.dev/manual/wireshark/).
+    Since our lab is launched with containerlab, we can leverage the transparent sniffing of packets that [it offers](https://containerlab.dev/manual/wireshark/).
 
     By capturing on the `e1-49` interface of the `clab-evpn01-leaf1` container, we are able to collect all the packets that are flowing between the nodes. Then we simply flap the EVPN instance in the `vrf-1` network instance to trigger the BGP updates to flow and see them in the live capture.
 
-    [Here is the pcap file](https://github.com/learn-srlinux/site/blob/master/docs/tutorials/l2evpn/evpn01-imet-routes.pcapng) with the IMET routes advertisements between `leaf1` and `leaf2`.
+    [Here is the pcap file](https://github.com/srl-labs/learn-srlinux/blob/master/docs/tutorials/l2evpn/evpn01-imet-routes.pcapng) with the IMET routes advertisements between `leaf1` and `leaf2`.
 
 When the IMET routes from `leaf2` are imported for `vrf-1` network-instance, the corresponding multicast VXLAN destinations are added and can be checked with the following command:
 
-```
+```srl
 A:leaf1# show tunnel-interface vxlan1 vxlan-interface 1 bridge-table multicast-destinations destination *
 -------------------------------------------------------------------------------
 Show report for vxlan-interface vxlan1.1 multicast destinations (flooding-list)
@@ -777,9 +811,10 @@ This multicast destination means that BUM frames received on a bridged sub-inter
 As to the unicast destinations there are none so far, and this is because we haven't yet received any MAC/IP RT2 EVPN routes. But before looking into the RT2 EVPN routes, let's zoom into VXLAN tunnels that got built right after we receive the first IMET RT3 routes.
 
 ### VXLAN tunnels
-After receiving EVPN routes from the remote leafs with VXLAN encapsulation[^4], SR Linux creates VXLAN tunnels towards remote VTEP, whose address is received in EVPN IMET routes. The state of a single remote VTEP we have in our lab is shown below from the `leaf1` switch.
 
-```
+After receiving EVPN routes from the remote leafs with VXLAN encapsulation[^5], SR Linux creates VXLAN tunnels towards remote VTEP, whose address is received in EVPN IMET routes. The state of a single remote VTEP we have in our lab is shown below from the `leaf1` switch.
+
+```srl
 A:leaf1# /show tunnel vxlan-tunnel all
 ----------------------------------------------------------
 Show report for vxlan-tunnels
@@ -795,11 +830,11 @@ Show report for vxlan-tunnels
 
 The VXLAN tunnel is built between the `vxlan` interfaces in the MAC-VRF network instances, which internally use `system` interfaces of the `default` network instance as a VTEP:
 
-<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:8,&quot;zoom&quot;:4,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/learn-srlinux/site/diagrams/quickstart.drawio&quot;}"></div>
+<div class="mxgraph" style="max-width:100%;border:1px solid transparent;margin:0 auto; display:block;" data-mxgraph="{&quot;page&quot;:8,&quot;zoom&quot;:4,&quot;highlight&quot;:&quot;#0000ff&quot;,&quot;nav&quot;:true,&quot;check-visible-state&quot;:true,&quot;resize&quot;:true,&quot;url&quot;:&quot;https://raw.githubusercontent.com/srl-labs/learn-srlinux/diagrams/quickstart.drawio&quot;}"></div>
 
-Once a VTEP is created in the vxlan-tunnel table with a non-zero allocated index[^3], an entry in the tunnel-table is also created for the tunnel.
+Once a VTEP is created in the vxlan-tunnel table with a non-zero allocated index[^6], an entry in the tunnel-table is also created for the tunnel.
 
-```
+```srl
 A:leaf1# /show network-instance default tunnel-table all
 -------------------------------------------------------------------------------------------------------
 Show report for network instance "default" tunnel table
@@ -817,7 +852,7 @@ Show report for network instance "default" tunnel table
 
 As was mentioned, when the leafs exchanged only EVPN IMET routes they build the BUM flooding tree (aka multicast destinations), but unicast destinations are yet unknown, which is seen in the below output:
 
-```
+```srl
 A:leaf1# show tunnel-interface vxlan1 vxlan-interface 1 bridge-table unicast-destinations destination *
 -------------------------------------------------------------------------------
 Show report for vxlan-interface vxlan1.1 unicast destinations
@@ -834,7 +869,8 @@ Summary
 ```
 
 This is due to the fact that no [MAC/IP EVPN routes](https://datatracker.ietf.org/doc/html/rfc7432#section-7.2) are being advertised yet. If we take a look at the MAC table of the `vrf-1`, we will see that no local MAC addresses are there, and this is because the servers haven't yet sent any frames towards the leafs[^7].
-```
+
+```srl
 A:leaf1# show network-instance vrf-1 bridge-table mac-table all
 -------------------------------------------------------------------------------
 Mac-table of network instance vrf-1
@@ -866,7 +902,7 @@ rtt min/avg/max/mdev = 0.784/0.986/1.275/0.209 ms
 
 Much better! The dataplane works and we can check that the MAC table in the `vrf-1` network-instance has been populated with local and EVPN-learned MACs:
 
-```
+```srl
 A:leaf1# show network-instance vrf-1 bridge-table mac-table all
 ---------------------------------------------------------------------------------------------------------------------------------------------
 Mac-table of network instance vrf-1
@@ -894,7 +930,7 @@ When traffic is exchanged between `srv1` and `srv2`, the MACs are learned on the
 
 The below output shows the MAC/IP EVPN route that `leaf1` received from its neighbor. The NLRI information contains the MAC of the `srv2`:
 
-```
+```srl
 A:leaf1# show network-instance default protocols bgp routes evpn route-type 2 summary
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Show report for the BGP route table of network-instance "default"
@@ -919,7 +955,7 @@ Type 2 MAC-IP Advertisement Routes
 
 The MAC/IP EVPN routes also triggers the creation of the unicast tunnel destinations which were empty before:
 
-```
+```srl
 A:leaf1# show tunnel-interface vxlan1 vxlan-interface 1 bridge-table unicast-destinations destination *
 ---------------------------------------------------------------------------------------------------------------------------------------------
 Show report for vxlan-interface vxlan1.1 unicast destinations
@@ -942,7 +978,7 @@ Summary
 ```
 
 !!!tip "packet capture"
-    [The following pcap](https://github.com/learn-srlinux/site/blob/master/docs/tutorials/l2evpn/evpn01-macip-routes.pcapng) was captured a moment before `srv1` started to ping `srv2` on `leaf1` interface `e1-49`.
+    [The following pcap](https://github.com/srl-labs/learn-srlinux/blob/master/docs/tutorials/l2evpn/evpn01-macip-routes.pcapng) was captured a moment before `srv1` started to ping `srv2` on `leaf1` interface `e1-49`.
 
     It shows how:
 
@@ -953,11 +989,10 @@ Summary
 
 This concludes the verification steps, as we have a working data plane connectivity between the servers.
 
-
 [^1]: as was verified [before](fabric.md#dataplane)
 [^2]: containerlab assigns mac addresses to the interfaces with OUI `00:C1:AB`. We are changing the generated MAC with a more recognizable address, since we want to easily identify MACs in the bridge tables.
-[^3]: If the next hop is not resolved to a route in the default network-instance route-table, the index in the vxlan-tunnel table shows as “0” for the VTEP and no tunnel-table is created.
-[^4]: IMET routes have extended community that conveys the encapsulation type. And for VXLAN EVPN it states VXLAN encap. Check [pcap](https://github.com/learn-srlinux/site/blob/master/docs/tutorials/l2evpn/evpn01-imet-routes.pcapng) for reference.
-[^5]: Per [section 5.1.2 of RFC 8365](https://datatracker.ietf.org/doc/html/rfc8365#section-5.1.2)
-[^6]: Easily extracted with doing `info <container>` where `container` is `routing-policy`, `network-instance *`, `interface *`, `tunnel-interface *`
+[^3]: Per [section 5.1.2 of RFC 8365](https://datatracker.ietf.org/doc/html/rfc8365#section-5.1.2)
+[^4]: Easily extracted with doing `info <container>` where `container` is `routing-policy`, `network-instance *`, `interface *`, `tunnel-interface *`
+[^5]: IMET routes have extended community that conveys the encapsulation type. And for VXLAN EVPN it states VXLAN encap. Check [pcap](https://github.com/srl-labs/learn-srlinux/blob/master/docs/tutorials/l2evpn/evpn01-imet-routes.pcapng) for reference.
+[^6]: If the next hop is not resolved to a route in the default network-instance route-table, the index in the vxlan-tunnel table shows as “0” for the VTEP and no tunnel-table is created.
 [^7]: We did try to ping from `srv1` to `srv2` in [server interfaces](#server-interfaces) section which triggered MAC-VRF to insert a locally learned MAC into its MAC table, but since then this mac has aged out, and thus the table is empty again.
